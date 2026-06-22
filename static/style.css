@@ -1,0 +1,117 @@
+@font-face {
+	font-family: "Geist Pixel";
+	src: url("/static/fonts/GeistPixel.ttf") format("opentype");
+}
+
+@font-face {
+	font-family: "Redaction 50";
+  	src: url("/static/fonts/Redaction_50-Regular.woff2") format("woff");
+	font-weight: 500;
+	font-style: normal;
+}
+@font-face {
+	font-family: "Redaction 50";
+  	src: url("/static/fonts/Redaction_50-Italic.woff2") format("woff");
+	font-weight: 500;
+	font-style: italic;
+}
+@font-face {
+	font-family: "Redaction 50";
+  	src: url("/static/fonts/Redaction_50-Bold.woff2") format("woff");
+	font-weight: 700;
+	font-style: normal;
+}
+@font-face {
+	font-family: "Redaction 70";
+  	src: url("/static/fonts/Redaction_70-Regular.woff2") format("woff");
+	font-weight: 500;
+	font-style: normal;
+}
+@font-face {
+	font-family: "Redaction 70";
+  	src: url("/static/fonts/Redaction_70-Italic.woff2") format("woff");
+	font-weight: 500;
+	font-style: italic;
+}
+@font-face {
+	font-family: "Redaction 70";
+  	src: url("/static/fonts/Redaction_70-Bold.woff2") format("woff");
+	font-weight: 700;
+	font-style: normal;
+}
+
+
+body {
+	display: flex; 
+	flex-direction: column; 
+	align-items: center;
+}
+
+main {
+	font-family: 'Redaction 50', 'Times New Roman', serif;
+	width: 80ch;
+}
+
+
+header {
+	margin-top: 3em;
+}
+
+.breakout {
+	display: flex;
+	justify-content: center;
+}
+
+.center {
+	display: flex;
+	justify-content: center;
+}
+
+.posts {
+	columns: 3;
+	font-family: 'Geist Pixel';
+}
+
+@media screen and (max-width: 800px) {
+  .posts {
+    column-count: 1;
+  }
+  main {
+	  width: 100%;
+  }
+}
+@media screen and (min-width: 801px) and (max-width: 1200px) {
+  .posts {
+    column-count: 2;
+  }
+}
+@media screen and (min-width: 1201px) and (max-width: 1900px) {
+  .posts {
+    column-count: 3;
+  }
+}
+
+.post {
+	break-inside: avoid;
+	padding: 0.4em;
+}
+.post a {
+	border: 1px solid rgb(209 213 219); 
+	padding: 0.4em;
+	border-radius: 0.25rem; 
+	color: black; 
+	display: block;
+	width: 40ch;
+	color: black; 
+	text-decoration: none;
+}
+.post img {
+	width: 100%;
+	border-radius: 0.25rem;
+}
+
+.webring {
+	display: flex;
+	justify-content: space-between;	
+	font-family: 'Redaction 70', 'Times New Roman', serif;
+}

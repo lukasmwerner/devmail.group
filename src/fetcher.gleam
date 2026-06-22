@@ -1,15 +1,27 @@
 import gleam/erlang/process
+import gleam/http/request
+import gleam/httpc
 import gleam/list
 import gleam/order
 import gleam/otp/actor
+import gleam/result
 import gleam/time/duration
 import gleam/time/timestamp
 import members
+import presentable_soup as soup
 import rss
 
 pub fn make_fetcher() -> actor.Started(process.Subject(Message)) {
   let assert Ok(act) =
-    actor.new(fetch())
+    actor.new({
+      case fetch() {
+        Ok(next_state) -> next_state
+        Error(e) -> {
+          echo e
+          panic
+        }
+      }
+    })
     |> actor.on_message(handle_message)
     |> actor.start()
   act
@@ -48,37 +60,102 @@ fn handle_message(
 
 fn when_expires(
   state: State,
-  make_next_state: fn() -> State,
+  make_next_state: fn() -> Result(State, rss.RssError),
 ) -> actor.Next(State, b) {
   case timestamp.compare(state.expires, timestamp.system_time()) {
-    order.Gt -> actor.continue(make_next_state())
+    order.Lt -> {
+      actor.continue({
+        case make_next_state() {
+          Ok(next_state) -> next_state
+          Error(e) -> {
+            echo e
+            state
+          }
+        }
+      })
+    }
     _ -> actor.continue(state)
   }
 }
 
-fn fetch() -> State {
-  let in = timestamp.system_time() |> timestamp.add(duration.minutes(15))
+fn fetch() -> Result(State, rss.RssError) {
+  let in = timestamp.system_time() |> timestamp.add(duration.minutes(2))
+
+  let results = process.new_subject()
+  members.members()
+  |> list.map(fn(member) {
+    process.spawn(fn() {
+      case rss.fetch_feed(member.rss, member.name) {
+        Ok(feed) -> {
+          process.send(results, Ok(feed))
+        }
+        Error(e) -> {
+          process.send(results, Error(e))
+        }
+      }
+    })
+  })
 
   let feeds =
     members.members()
-    |> list.map(fn(member) {
-      case rss.fetch_feed(member.rss, member.name) {
-        Ok(feed) -> feed
-        Error(_) -> rss.Rss(rss.Channel(member.name, "", "", []))
+    |> list.map(fn(_) { process.receive_forever(results) })
+    |> result.all()
+
+  case feeds {
+    Ok(feeds) -> {
+      let top_n =
+        feeds
+        |> list.map(fn(feed) { feed.channel.posts |> list.take(3) })
+        |> list.flatten()
+        |> list.sort(by: rss.reverse_crono)
+        |> list.map(fn(post) {
+          rss.Post(
+            title: post.title,
+            author: post.author,
+            description: post.description,
+            id: post.id,
+            date: post.date,
+            link: post.link,
+            ogimg: fetch_og_img(post.link),
+          )
+        })
+
+      let posts =
+        feeds
+        |> list.map(fn(feed) { feed.channel.posts })
+        |> list.flatten()
+        |> list.sort(by: rss.reverse_crono)
+
+      Ok(State(expires: in, posts:, top_n:))
+    }
+    Error(e) -> Error(e)
+  }
+}
+
+fn fetch_og_img(page link: String) -> String {
+  let assert Ok(req) = request.to(link)
+  case httpc.send(req) {
+    Ok(resp) -> {
+      case
+        soup.element([
+          soup.with_tag("meta"),
+          soup.with_attribute("property", "og:image"),
+        ])
+        |> soup.return(soup.attributes())
+        |> soup.scrape(resp.body)
+      {
+        Ok(attrs) -> {
+          let #(_, link) =
+            list.find(attrs, fn(attr) {
+              let #(name, _) = attr
+              name == "content"
+            })
+            |> result.unwrap(#("content", ""))
+          link
+        }
+        Error(_) -> ""
       }
-    })
-
-  let top_n =
-    feeds
-    |> list.map(fn(feed) { feed.channel.posts |> list.take(3) })
-    |> list.flatten()
-    |> list.sort(by: rss.reverse_crono)
-
-  let posts =
-    feeds
-    |> list.map(fn(feed) { feed.channel.posts })
-    |> list.flatten()
-    |> list.sort(by: rss.reverse_crono)
-
-  State(expires: in, posts:, top_n:)
+    }
+    Error(_) -> ""
+  }
 }

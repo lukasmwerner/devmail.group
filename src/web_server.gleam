@@ -1,11 +1,15 @@
 import fetcher
+import filepath
 import gleam/bytes_tree
 import gleam/erlang/process
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
+import gleam/option
 import gleam/otp/actor
 import gleam/otp/static_supervisor as supervisor
+import gleam/result
 import index
+import mimetype
 import mist.{type Connection, type ResponseData}
 import rss
 
@@ -32,6 +36,20 @@ pub fn serve(post_subject: process.Subject(fetcher.Message)) {
           |> mist.Bytes,
         )
       }
+      ["static", ..path] -> {
+        let filename = path_join(["static", ..path])
+        let assert Ok(resp) =
+          mist.send_file(filename, offset: 0, limit: option.None)
+        response.new(200)
+        |> response.set_header(
+          "Content-Type",
+          mimetype.extension_to_mime_type(
+            filepath.extension(filename) |> result.unwrap(""),
+          )
+            |> mimetype.to_string,
+        )
+        |> response.set_body(resp)
+      }
       _ -> not_found
     }
   }
@@ -50,4 +68,12 @@ pub fn serve(post_subject: process.Subject(fetcher.Message)) {
     |> supervisor.start
 
   process.sleep_forever()
+}
+
+fn path_join(parts: List(String)) -> String {
+  case parts {
+    [] -> ""
+    [single] -> single
+    [head, ..rest] -> filepath.join(head, path_join(rest))
+  }
 }
