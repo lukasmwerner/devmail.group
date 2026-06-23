@@ -104,7 +104,7 @@ pub fn index(posts: List(Post)) -> Response(ResponseData) {
                 ],
                 "Colorado School of Mines",
               ),
-              html.Text(" in 2023 through coursework and the Mines "),
+              html.Text(" in 2023 through coursework, the Mines "),
               html.a_text(
                 [
                   attr.href("https://acm.mines.edu"),
