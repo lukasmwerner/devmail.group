@@ -32,7 +32,7 @@ fn truncate(content: String, length: Int) -> String {
 }
 
 fn web_ring() -> html.Node {
-  html.div([attr.class("webring")], [
+  html.footer([attr.class("webring")], [
     html.a_text(
       [attr.href("https://grantlemons.com/webring/prev?Referer=devmail.group")],
       "← Left",
@@ -57,6 +57,10 @@ pub fn index(posts: List(Post)) -> Response(ResponseData) {
     html.Html([attr.lang("en-us")], [
       html.Head([
         html.title("/dev/mail/*"),
+        html.LeafElement("meta", [
+          attr.Attr("name", "viewport"),
+          attr.Attr("content", "width=device-width, initial-scale=1"),
+        ]),
         html.LeafElement("link", [
           attr.rel("stylesheet"),
           attr.href("/static/style.css"),
@@ -127,7 +131,7 @@ pub fn index(posts: List(Post)) -> Response(ResponseData) {
               html.Fragment(
                 posts
                 |> list.map(fn(post) {
-                  html.div(
+                  html.article(
                     [
                       attr.class("post"),
                     ],

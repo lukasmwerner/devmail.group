@@ -101,7 +101,7 @@ header {
 	border-radius: 0.25rem; 
 	color: black; 
 	display: block;
-	width: 40ch;
+	max-width: 40ch;
 	color: black; 
 	text-decoration: none;
 }
