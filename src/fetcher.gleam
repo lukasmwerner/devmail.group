@@ -109,14 +109,20 @@ fn fetch() -> Result(State, rss.RssError) {
         |> list.flatten()
         |> list.sort(by: rss.reverse_crono)
         |> list.map(fn(post) {
+          let page = fetch_page(post.link)
+
           rss.Post(
             title: post.title,
             author: post.author,
-            description: post.description,
+            description: get_og_content(
+              "og:description",
+              page,
+              post.description,
+            ),
             id: post.id,
             date: post.date,
             link: post.link,
-            ogimg: fetch_og_img(post.link),
+            ogimg: get_og_content("og:image", page, ""),
           )
         })
 
@@ -132,30 +138,36 @@ fn fetch() -> Result(State, rss.RssError) {
   }
 }
 
-fn fetch_og_img(page link: String) -> String {
+fn fetch_page(page link: String) -> String {
   let assert Ok(req) = request.to(link)
   case httpc.send(req) {
-    Ok(resp) -> {
-      case
-        soup.element([
-          soup.with_tag("meta"),
-          soup.with_attribute("property", "og:image"),
-        ])
-        |> soup.return(soup.attributes())
-        |> soup.scrape(resp.body)
-      {
-        Ok(attrs) -> {
-          let #(_, link) =
-            list.find(attrs, fn(attr) {
-              let #(name, _) = attr
-              name == "content"
-            })
-            |> result.unwrap(#("content", ""))
-          link
-        }
-        Error(_) -> ""
-      }
-    }
+    Ok(resp) -> resp.body
     Error(_) -> ""
+  }
+}
+
+fn get_og_content(
+  tag: String,
+  page document: String,
+  default default: String,
+) -> String {
+  case
+    soup.element([
+      soup.with_tag("meta"),
+      soup.with_attribute("property", tag),
+    ])
+    |> soup.return(soup.attributes())
+    |> soup.scrape(document)
+  {
+    Ok(attrs) -> {
+      let #(_, link) =
+        list.find(attrs, fn(attr) {
+          let #(name, _) = attr
+          name == "content"
+        })
+        |> result.unwrap(#("content", ""))
+      link
+    }
+    Error(_) -> default
   }
 }
