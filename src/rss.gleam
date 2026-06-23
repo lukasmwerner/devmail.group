@@ -79,6 +79,9 @@ pub fn make_feed(posts: List(Post)) -> String {
               xml.element("link", [], [xml.string(post.link)]),
               xml.element("guid", [], [xml.string(post.link)]),
               xml.element("description", [], [xml.cdata(post.description)]),
+              xml.element("author", [], [
+                xml.element("name", [], [xml.string(post.author)]),
+              ]),
             ])
           })
         }
