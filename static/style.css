@@ -60,6 +60,7 @@ header {
 .breakout {
 	display: flex;
 	justify-content: center;
+	margin:1em calc(50% - 50vw);
 }
 
 .center {
