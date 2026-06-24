@@ -161,6 +161,7 @@ fn fetch(subject) -> Result(State, rss.RssError) {
 
 fn fetch_page(page link: String) -> String {
   let assert Ok(req) = request.to(link)
+  let req = req |> request.set_header("User-Agent", "devmail-fetcher/1.0")
   httpc.send(req)
   |> result.map(fn(resp) { resp.body })
   |> result.unwrap("")
