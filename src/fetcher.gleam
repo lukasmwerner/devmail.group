@@ -13,9 +13,19 @@ import rss
 
 pub fn make_fetcher() -> actor.Started(process.Subject(Message)) {
   let assert Ok(act) =
-    actor.new({
-      case fetch() {
-        Ok(next_state) -> next_state
+    actor.new_with_initialiser(60_000, fn(subject) {
+      case fetch(subject) {
+        Ok(State(subject, expires, posts, top_n, _)) ->
+          actor.initialised(State(
+            subject:,
+            expires:,
+            posts:,
+            top_n:,
+            fetching: False,
+          ))
+          |> actor.returning(subject)
+          |> Ok
+
         Error(e) -> {
           echo e
           panic
@@ -29,14 +39,17 @@ pub fn make_fetcher() -> actor.Started(process.Subject(Message)) {
 
 pub type State {
   State(
+    subject: process.Subject(Message),
     expires: timestamp.Timestamp,
     posts: List(rss.Post),
     top_n: List(rss.Post),
+    fetching: Bool,
   )
 }
 
 pub type Message {
   Stop
+  Results(State)
   FetchTopN(process.Subject(List(rss.Post)))
   Fetch(process.Subject(List(rss.Post)))
 }
@@ -49,36 +62,49 @@ fn handle_message(
     Stop -> actor.stop()
     Fetch(client) -> {
       actor.send(client, state.posts)
-      when_expires(state, fetch)
+      actor.continue(State(
+        subject: state.subject,
+        expires: state.expires,
+        posts: state.posts,
+        top_n: state.top_n,
+        fetching: when_expires(state),
+      ))
     }
     FetchTopN(client) -> {
       actor.send(client, state.top_n)
-      when_expires(state, fetch)
+      actor.continue(State(
+        subject: state.subject,
+        expires: state.expires,
+        posts: state.posts,
+        top_n: state.top_n,
+        fetching: when_expires(state),
+      ))
     }
+    Results(next_state) -> actor.continue(next_state)
   }
 }
 
-fn when_expires(
-  state: State,
-  make_next_state: fn() -> Result(State, rss.RssError),
-) -> actor.Next(State, b) {
+fn when_expires(state: State) -> Bool {
   case timestamp.compare(state.expires, timestamp.system_time()) {
-    order.Lt -> {
-      actor.continue({
-        case make_next_state() {
-          Ok(next_state) -> next_state
-          Error(e) -> {
-            echo e
-            state
+    order.Lt if !state.fetching -> {
+      // fetch in background
+      process.spawn_unlinked(fn() {
+        case fetch(state.subject) {
+          Ok(next_state) -> {
+            actor.send(state.subject, Results(next_state))
+            Nil
           }
+          Error(_) -> Nil
         }
       })
+
+      True
     }
-    _ -> actor.continue(state)
+    _ -> False
   }
 }
 
-fn fetch() -> Result(State, rss.RssError) {
+fn fetch(subject) -> Result(State, rss.RssError) {
   let in = timestamp.system_time() |> timestamp.add(duration.minutes(2))
 
   let results = process.new_subject()
@@ -132,7 +158,7 @@ fn fetch() -> Result(State, rss.RssError) {
         |> list.flatten()
         |> list.sort(by: rss.reverse_crono)
 
-      Ok(State(expires: in, posts:, top_n:))
+      Ok(State(subject:, expires: in, posts:, top_n:, fetching: False))
     }
     Error(e) -> Error(e)
   }
