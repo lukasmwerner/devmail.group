@@ -105,7 +105,7 @@ fn when_expires(state: State) -> Bool {
 }
 
 fn fetch(subject) -> Result(State, rss.RssError) {
-  let in = timestamp.system_time() |> timestamp.add(duration.minutes(2))
+  let in = timestamp.system_time() |> timestamp.add(duration.minutes(15))
 
   let results = process.new_subject()
   members.members()
