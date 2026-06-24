@@ -49,7 +49,7 @@ pub type State {
 
 pub type Message {
   Stop
-  Results(State)
+  NextState(State)
   FetchTopN(process.Subject(List(rss.Post)))
   Fetch(process.Subject(List(rss.Post)))
 }
@@ -80,7 +80,7 @@ fn handle_message(
         fetching: when_expires(state),
       ))
     }
-    Results(next_state) -> actor.continue(next_state)
+    NextState(next_state) -> actor.continue(next_state)
   }
 }
 
@@ -91,13 +91,16 @@ fn when_expires(state: State) -> Bool {
       process.spawn_unlinked(fn() {
         case fetch(state.subject) {
           Ok(next_state) -> {
-            actor.send(state.subject, Results(next_state))
+            actor.send(state.subject, NextState(next_state))
             Nil
           }
-          Error(_) -> Nil
+          Error(e) -> {
+            echo e
+            Nil
+          }
         }
       })
-
+      // Refetching!
       True
     }
     _ -> False
@@ -122,54 +125,45 @@ fn fetch(subject) -> Result(State, rss.RssError) {
     })
   })
 
-  let feeds =
+  use feeds <- result.try(
     members.members()
     |> list.map(fn(_) { process.receive_forever(results) })
-    |> result.all()
+    |> result.all(),
+  )
 
-  case feeds {
-    Ok(feeds) -> {
-      let top_n =
-        feeds
-        |> list.map(fn(feed) { feed.channel.posts |> list.take(3) })
-        |> list.flatten()
-        |> list.sort(by: rss.reverse_crono)
-        |> list.map(fn(post) {
-          let page = fetch_page(post.link)
+  let top_n =
+    feeds
+    |> list.map(fn(feed: rss.Rss) { feed.channel.posts |> list.take(3) })
+    |> list.flatten()
+    |> list.sort(by: rss.reverse_crono)
+    |> list.map(fn(post) {
+      let page = fetch_page(post.link)
 
-          rss.Post(
-            title: post.title,
-            author: post.author,
-            description: get_og_content(
-              "og:description",
-              page,
-              post.description,
-            ),
-            id: post.id,
-            date: post.date,
-            link: post.link,
-            ogimg: get_og_content("og:image", page, ""),
-          )
-        })
+      rss.Post(
+        title: post.title,
+        author: post.author,
+        description: get_og_content("og:description", page, post.description),
+        id: post.id,
+        date: post.date,
+        link: post.link,
+        ogimg: get_og_content("og:image", page, ""),
+      )
+    })
 
-      let posts =
-        feeds
-        |> list.map(fn(feed) { feed.channel.posts })
-        |> list.flatten()
-        |> list.sort(by: rss.reverse_crono)
+  let posts =
+    feeds
+    |> list.map(fn(feed) { feed.channel.posts })
+    |> list.flatten()
+    |> list.sort(by: rss.reverse_crono)
 
-      Ok(State(subject:, expires: in, posts:, top_n:, fetching: False))
-    }
-    Error(e) -> Error(e)
-  }
+  Ok(State(subject:, expires: in, posts:, top_n:, fetching: False))
 }
 
 fn fetch_page(page link: String) -> String {
   let assert Ok(req) = request.to(link)
-  case httpc.send(req) {
-    Ok(resp) -> resp.body
-    Error(_) -> ""
-  }
+  httpc.send(req)
+  |> result.map(fn(resp) { resp.body })
+  |> result.unwrap("")
 }
 
 fn get_og_content(
@@ -177,14 +171,15 @@ fn get_og_content(
   page document: String,
   default default: String,
 ) -> String {
-  case
+  let results =
     soup.element([
       soup.with_tag("meta"),
       soup.with_attribute("property", tag),
     ])
     |> soup.return(soup.attributes())
     |> soup.scrape(document)
-  {
+
+  case results {
     Ok(attrs) -> {
       let #(_, link) =
         list.find(attrs, fn(attr) {
