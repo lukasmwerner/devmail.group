@@ -1,3 +1,4 @@
+import concurrent
 import gleam/erlang/process
 import gleam/http/request
 import gleam/httpc
@@ -135,8 +136,7 @@ fn fetch(subject) -> Result(State, rss.RssError) {
     feeds
     |> list.map(fn(feed: rss.Rss) { feed.channel.posts |> list.take(3) })
     |> list.flatten()
-    |> list.sort(by: rss.reverse_crono)
-    |> list.map(fn(post) {
+    |> concurrent.all(fn(post) {
       let page = fetch_page(post.link)
 
       rss.Post(
@@ -149,6 +149,7 @@ fn fetch(subject) -> Result(State, rss.RssError) {
         ogimg: get_og_content("og:image", page, ""),
       )
     })
+    |> list.sort(by: rss.reverse_crono)
 
   let posts =
     feeds
