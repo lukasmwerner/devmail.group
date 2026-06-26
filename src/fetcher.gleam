@@ -10,15 +10,23 @@ import gleam/time/duration
 import gleam/time/timestamp
 import members
 import presentable_soup as soup
+import rasa/table
 import rss
 
 pub fn make_fetcher() -> actor.Started(process.Subject(Message)) {
   let assert Ok(act) =
     actor.new_with_initialiser(60_000, fn(subject) {
-      case fetch(subject) {
-        Ok(State(subject, expires, posts, top_n, _)) ->
+      let cache =
+        table.new()
+        |> table.with_kind(table.Set)
+        |> table.with_access(table.Public)
+        |> table.build
+
+      case fetch(cache, subject) {
+        Ok(State(subject, _, expires, posts, top_n, _)) ->
           actor.initialised(State(
             subject:,
+            cache:,
             expires:,
             posts:,
             top_n:,
@@ -38,9 +46,14 @@ pub fn make_fetcher() -> actor.Started(process.Subject(Message)) {
   act
 }
 
+pub type CacheData {
+  CacheData(description: String, image_url: String)
+}
+
 pub type State {
   State(
     subject: process.Subject(Message),
+    cache: table.Table(String, CacheData),
     expires: timestamp.Timestamp,
     posts: List(rss.Post),
     top_n: List(rss.Post),
@@ -65,6 +78,7 @@ fn handle_message(
       actor.send(client, state.posts)
       actor.continue(State(
         subject: state.subject,
+        cache: state.cache,
         expires: state.expires,
         posts: state.posts,
         top_n: state.top_n,
@@ -75,6 +89,7 @@ fn handle_message(
       actor.send(client, state.top_n)
       actor.continue(State(
         subject: state.subject,
+        cache: state.cache,
         expires: state.expires,
         posts: state.posts,
         top_n: state.top_n,
@@ -90,7 +105,7 @@ fn when_expires(state: State) -> Bool {
     order.Lt if !state.fetching -> {
       // fetch in background
       process.spawn_unlinked(fn() {
-        case fetch(state.subject) {
+        case fetch(state.cache, state.subject) {
           Ok(next_state) -> {
             actor.send(state.subject, NextState(next_state))
             Nil
@@ -108,7 +123,10 @@ fn when_expires(state: State) -> Bool {
   }
 }
 
-fn fetch(subject) -> Result(State, rss.RssError) {
+fn fetch(
+  cache: table.Table(String, CacheData),
+  subject,
+) -> Result(State, rss.RssError) {
   let in = timestamp.system_time() |> timestamp.add(duration.minutes(15))
 
   let results = process.new_subject()
@@ -137,16 +155,35 @@ fn fetch(subject) -> Result(State, rss.RssError) {
     |> list.map(fn(feed: rss.Rss) { feed.channel.posts |> list.take(3) })
     |> list.flatten()
     |> concurrent.all(fn(post) {
-      let page = fetch_page(post.link)
+      let #(desc, img) = case table.lookup(cache, post.link) {
+        Ok(CacheData(desc, img)) -> {
+          #(desc, img)
+        }
+        _ -> {
+          case fetch_page(post.link) {
+            Ok(page) -> {
+              let desc =
+                get_og_content("og:description", page, post.description)
+              let img = get_og_content("og:image", page, "")
+              let assert Ok(_) =
+                table.insert_new(cache, post.link, CacheData(desc, img))
+              #(desc, img)
+            }
+            Error(_) -> {
+              #(post.description, "")
+            }
+          }
+        }
+      }
 
       rss.Post(
         title: post.title,
         author: post.author,
-        description: get_og_content("og:description", page, post.description),
+        description: desc,
         id: post.id,
         date: post.date,
         link: post.link,
-        ogimg: get_og_content("og:image", page, ""),
+        ogimg: img,
       )
     })
     |> list.sort(by: rss.reverse_crono)
@@ -157,15 +194,14 @@ fn fetch(subject) -> Result(State, rss.RssError) {
     |> list.flatten()
     |> list.sort(by: rss.reverse_crono)
 
-  Ok(State(subject:, expires: in, posts:, top_n:, fetching: False))
+  Ok(State(subject:, cache:, expires: in, posts:, top_n:, fetching: False))
 }
 
-fn fetch_page(page link: String) -> String {
+fn fetch_page(page link: String) -> Result(String, _) {
   let assert Ok(req) = request.to(link)
   let req = req |> request.set_header("User-Agent", "devmail-fetcher/1.0")
   httpc.send(req)
   |> result.map(fn(resp) { resp.body })
-  |> result.unwrap("")
 }
 
 fn get_og_content(
@@ -183,13 +219,13 @@ fn get_og_content(
 
   case results {
     Ok(attrs) -> {
-      let #(_, link) =
+      let #(_, value) =
         list.find(attrs, fn(attr) {
           let #(name, _) = attr
           name == "content"
         })
         |> result.unwrap(#("content", ""))
-      link
+      value
     }
     Error(_) -> default
   }

@@ -26,6 +26,7 @@ parsed_it = ">= 0.1.1 and < 1.0.0"
 filepath = ">= 1.1.2 and < 2.0.0"
 mimetype = ">= 0.24.0 and < 1.0.0"
 presentable_soup = ">= 2.0.0 and < 3.0.0"
+rasa = ">= 2.1.0 and < 3.0.0"
 
 [dev_dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
