@@ -1,5 +1,5 @@
-ARG ERLANG_VERSION=28.5
-ARG GLEAM_VERSION=v1.16.0
+ARG ERLANG_VERSION=29
+ARG GLEAM_VERSION=v1.17.0
 
 # Gleam stage: run on the builder's native platform so Erlang/Gleam
 # tooling is not executed through amd64 emulation on ARM machines.
