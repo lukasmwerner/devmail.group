@@ -1,57 +1,13 @@
-@font-face {
-	font-family: "Geist Pixel";
-	src: url("/static/fonts/GeistPixel.ttf") format("opentype");
-}
-
-@font-face {
-	font-family: "Redaction 50";
-  	src: url("/static/fonts/Redaction_50-Regular.woff2") format("woff");
-	font-weight: 500;
-	font-style: normal;
-}
-@font-face {
-	font-family: "Redaction 50";
-  	src: url("/static/fonts/Redaction_50-Italic.woff2") format("woff");
-	font-weight: 500;
-	font-style: italic;
-}
-@font-face {
-	font-family: "Redaction 50";
-  	src: url("/static/fonts/Redaction_50-Bold.woff2") format("woff");
-	font-weight: 700;
-	font-style: normal;
-}
-@font-face {
-	font-family: "Redaction 70";
-  	src: url("/static/fonts/Redaction_70-Regular.woff2") format("woff");
-	font-weight: 500;
-	font-style: normal;
-}
-@font-face {
-	font-family: "Redaction 70";
-  	src: url("/static/fonts/Redaction_70-Italic.woff2") format("woff");
-	font-weight: 500;
-	font-style: italic;
-}
-@font-face {
-	font-family: "Redaction 70";
-  	src: url("/static/fonts/Redaction_70-Bold.woff2") format("woff");
-	font-weight: 700;
-	font-style: normal;
-}
-
-
 body {
 	display: flex; 
 	flex-direction: column; 
 	align-items: center;
+	font-family: 'Merriweather', 'Georgia', serif;
 }
 
 main {
-	font-family: 'Redaction 50', 'Times New Roman', serif;
 	width: 80ch;
 }
-
 
 header {
 	margin-top: 3em;
@@ -70,7 +26,6 @@ header {
 
 .posts {
 	columns: 3;
-	font-family: 'Geist Pixel';
 }
 
 @media screen and (max-width: 800px) {
@@ -114,5 +69,4 @@ header {
 .webring {
 	display: flex;
 	justify-content: space-between;	
-	font-family: 'Redaction 70', 'Times New Roman', serif;
 }

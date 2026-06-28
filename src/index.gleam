@@ -62,8 +62,23 @@ pub fn index(posts: List(Post)) -> Response(ResponseData) {
           attr.Attr("content", "width=device-width, initial-scale=1"),
         ]),
         html.LeafElement("link", [
+          attr.rel("preconnect"),
+          attr.href("https://fonts.googleapis.com"),
+        ]),
+        html.LeafElement("link", [
+          attr.rel("preconnect"),
+          attr.href("https://fonts.gstatic.com"),
+          attr.crossorigin(""),
+        ]),
+        html.LeafElement("link", [
           attr.rel("stylesheet"),
           attr.href("/static/style.css"),
+        ]),
+        html.LeafElement("link", [
+          attr.rel("stylesheet"),
+          attr.href(
+            "https://fonts.googleapis.com/css2?family=Merriweather:wght@100..900&display=swap",
+          ),
         ]),
         html.LeafElement("link", [
           attr.rel("icon"),
