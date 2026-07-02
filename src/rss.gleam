@@ -93,6 +93,7 @@ pub fn make_feed(posts: List(Post)) -> String {
 
 pub fn fetch_feed(url: String, author: String) -> Result(Rss, RssError) {
   let assert Ok(req) = request.to(url)
+  let req = req |> request.set_header("User-Agent", "devmail-fetcher/1.0")
   case httpc.send(req) {
     Ok(resp) -> parse_feed(resp.body, author)
     Error(e) -> {
