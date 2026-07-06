@@ -26,6 +26,7 @@ ENV BUILD_TIME=${BUILD_TIME}
 #USER webapp
 COPY --from=build /app/build/erlang-shipment /app
 COPY static /app/static
+COPY .env /app/.env
 WORKDIR /app
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["run"]

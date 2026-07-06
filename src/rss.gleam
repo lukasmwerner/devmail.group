@@ -1,3 +1,4 @@
+import dot_env/env
 import gleam/dynamic/decode
 import gleam/http/request
 import gleam/httpc
@@ -93,7 +94,10 @@ pub fn make_feed(posts: List(Post)) -> String {
 
 pub fn fetch_feed(url: String, author: String) -> Result(Rss, RssError) {
   let assert Ok(req) = request.to(url)
-  let req = req |> request.set_header("User-Agent", "devmail-fetcher/1.0")
+  let req =
+    req
+    |> request.set_header("User-Agent", "devmail-fetcher/1.0")
+    |> request.set_header("X-Bot-ID", env.get_string_or("BOT_ID", "abc123"))
   case httpc.send(req) {
     Ok(resp) -> parse_feed(resp.body, author)
     Error(e) -> {
@@ -115,6 +119,7 @@ pub fn parse_feed(body: String, author: String) -> Result(Rss, RssError) {
       }
     }
     Error(e) -> {
+      echo "error parsing feed for: " <> author
       echo e
       Error(ParseError)
     }
