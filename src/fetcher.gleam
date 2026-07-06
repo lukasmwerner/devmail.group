@@ -144,11 +144,11 @@ fn fetch(
     })
   })
 
-  use feeds <- result.try(
+  // may drop invalid responses
+  let feeds =
     members.members()
     |> list.map(fn(_) { process.receive_forever(results) })
-    |> result.all(),
-  )
+    |> result.values()
 
   let top_n =
     feeds
