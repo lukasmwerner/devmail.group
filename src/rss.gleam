@@ -32,8 +32,8 @@ pub type Rss {
 }
 
 pub type RssError {
-  HttpError
-  ParseError
+  HttpError(author: String)
+  ParseError(author: String)
 }
 
 pub fn reverse_crono(a: Post, b: Post) -> order.Order {
@@ -102,7 +102,7 @@ pub fn fetch_feed(url: String, author: String) -> Result(Rss, RssError) {
     Ok(resp) -> parse_feed(resp.body, author)
     Error(e) -> {
       echo e
-      Error(HttpError)
+      Error(HttpError(author:))
     }
   }
 }
@@ -114,14 +114,14 @@ pub fn parse_feed(body: String, author: String) -> Result(Rss, RssError) {
         Ok(rss) -> Ok(rss)
         Error(errors) -> {
           echo xml.UnableToDecode(errors)
-          Error(ParseError)
+          Error(ParseError(author:))
         }
       }
     }
     Error(e) -> {
       echo "error parsing feed for: " <> author
       echo e
-      Error(ParseError)
+      Error(ParseError(author:))
     }
   }
 }

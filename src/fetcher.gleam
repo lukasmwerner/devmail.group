@@ -16,17 +16,24 @@ import rss
 pub fn make_fetcher() -> actor.Started(process.Subject(Message)) {
   let assert Ok(act) =
     actor.new_with_initialiser(60_000, fn(subject) {
-      let cache =
+      let content_cache =
         table.new()
         |> table.with_kind(table.Set)
         |> table.with_access(table.Public)
         |> table.build
 
-      case fetch(cache, subject) {
-        Ok(State(subject, _, expires, posts, top_n, _)) ->
+      let feeds_cache =
+        table.new()
+        |> table.with_kind(table.Set)
+        |> table.with_access(table.Public)
+        |> table.build
+
+      case fetch(content_cache, feeds_cache, subject) {
+        Ok(State(subject, _, _, expires, posts, top_n, _)) ->
           actor.initialised(State(
             subject:,
-            cache:,
+            content_cache:,
+            feeds_cache:,
             expires:,
             posts:,
             top_n:,
@@ -53,7 +60,8 @@ pub type CacheData {
 pub type State {
   State(
     subject: process.Subject(Message),
-    cache: table.Table(String, CacheData),
+    content_cache: table.Table(String, CacheData),
+    feeds_cache: table.Table(String, rss.Rss),
     expires: timestamp.Timestamp,
     posts: List(rss.Post),
     top_n: List(rss.Post),
@@ -78,7 +86,8 @@ fn handle_message(
       actor.send(client, state.posts)
       actor.continue(State(
         subject: state.subject,
-        cache: state.cache,
+        content_cache: state.content_cache,
+        feeds_cache: state.feeds_cache,
         expires: state.expires,
         posts: state.posts,
         top_n: state.top_n,
@@ -89,7 +98,8 @@ fn handle_message(
       actor.send(client, state.top_n)
       actor.continue(State(
         subject: state.subject,
-        cache: state.cache,
+        content_cache: state.content_cache,
+        feeds_cache: state.feeds_cache,
         expires: state.expires,
         posts: state.posts,
         top_n: state.top_n,
@@ -105,7 +115,7 @@ fn when_expires(state: State) -> Bool {
     order.Lt if !state.fetching -> {
       // fetch in background
       process.spawn_unlinked(fn() {
-        case fetch(state.cache, state.subject) {
+        case fetch(state.content_cache, state.feeds_cache, state.subject) {
           Ok(next_state) -> {
             actor.send(state.subject, NextState(next_state))
             Nil
@@ -124,7 +134,8 @@ fn when_expires(state: State) -> Bool {
 }
 
 fn fetch(
-  cache: table.Table(String, CacheData),
+  content_cache: table.Table(String, CacheData),
+  feeds_cache: table.Table(String, rss.Rss),
   subject,
 ) -> Result(State, rss.RssError) {
   let in = timestamp.system_time() |> timestamp.add(duration.minutes(15))
@@ -144,10 +155,39 @@ fn fetch(
     })
   })
 
-  // may drop invalid responses
   let feeds =
     members.members()
     |> list.map(fn(_) { process.receive_forever(results) })
+    |> list.map(fn(value) {
+      case value {
+        Ok(feed) -> {
+          let assert Ok(_) =
+            table.insert_new(
+              feeds_cache,
+              {
+                feed.channel.posts
+                |> list.first()
+                |> result.map(fn(p) { p.author })
+                |> result.unwrap("")
+              },
+              feed,
+            )
+          value
+        }
+        Error(rss.HttpError(author)) ->
+          table.lookup(feeds_cache, author)
+          |> result.map_error(fn(_) {
+            echo "cache failed: " <> author
+            rss.HttpError(author)
+          })
+        Error(rss.ParseError(author)) ->
+          table.lookup(feeds_cache, author)
+          |> result.map_error(fn(_) {
+            echo "cache failed: " <> author
+            rss.HttpError(author)
+          })
+      }
+    })
     |> result.values()
 
   let top_n =
@@ -155,7 +195,7 @@ fn fetch(
     |> list.map(fn(feed: rss.Rss) { feed.channel.posts |> list.take(3) })
     |> list.flatten()
     |> concurrent.all(fn(post) {
-      let #(desc, img) = case table.lookup(cache, post.link) {
+      let #(desc, img) = case table.lookup(content_cache, post.link) {
         Ok(CacheData(desc, img)) -> {
           #(desc, img)
         }
@@ -166,7 +206,7 @@ fn fetch(
                 get_og_content("og:description", page, post.description)
               let img = get_og_content("og:image", page, "")
               let assert Ok(_) =
-                table.insert_new(cache, post.link, CacheData(desc, img))
+                table.insert_new(content_cache, post.link, CacheData(desc, img))
               #(desc, img)
             }
             Error(_) -> {
@@ -194,7 +234,15 @@ fn fetch(
     |> list.flatten()
     |> list.sort(by: rss.reverse_crono)
 
-  Ok(State(subject:, cache:, expires: in, posts:, top_n:, fetching: False))
+  Ok(State(
+    subject:,
+    content_cache:,
+    feeds_cache:,
+    expires: in,
+    posts:,
+    top_n:,
+    fetching: False,
+  ))
 }
 
 fn fetch_page(page link: String) -> Result(String, _) {
