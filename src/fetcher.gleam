@@ -138,7 +138,7 @@ fn fetch(
   feeds_cache: table.Table(String, rss.Rss),
   subject,
 ) -> Result(State, rss.RssError) {
-  let in = timestamp.system_time() |> timestamp.add(duration.minutes(15))
+  let in = timestamp.system_time() |> timestamp.add(duration.minutes(60))
 
   let results = process.new_subject()
   members.members()
@@ -162,7 +162,7 @@ fn fetch(
       case value {
         Ok(feed) -> {
           let assert Ok(_) =
-            table.insert_new(
+            table.insert(
               feeds_cache,
               {
                 feed.channel.posts
@@ -174,18 +174,24 @@ fn fetch(
             )
           value
         }
-        Error(rss.HttpError(author)) ->
+        Error(rss.HttpError(author)) -> {
+          echo "http error: " <> author
+
           table.lookup(feeds_cache, author)
           |> result.map_error(fn(_) {
             echo "cache failed: " <> author
             rss.HttpError(author)
           })
-        Error(rss.ParseError(author)) ->
+        }
+        Error(rss.ParseError(author)) -> {
+          echo "parse error: " <> author
+
           table.lookup(feeds_cache, author)
           |> result.map_error(fn(_) {
             echo "cache failed: " <> author
             rss.HttpError(author)
           })
+        }
       }
     })
     |> result.values()
