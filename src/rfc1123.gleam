@@ -19,8 +19,6 @@ pub type Date {
 }
 
 pub fn parse(input: String) -> Result(Date, Nil) {
-  // TODO: change type to Result(timestamp.Timestamp, Nil) so that less of the
-  // logic is handled by rfc1123 itself and instead leans on gleam_time
   case string.split(input, " ") {
     [weekday, day, month, year, time, timezone] -> {
       case string.ends_with(weekday, ",") {
@@ -50,7 +48,11 @@ pub fn parse(input: String) -> Result(Date, Nil) {
   }
 }
 
-pub fn to_string(date: calendar.Date) -> String {
+/// Requires that the timezone is UTC
+pub fn calendar_to_string(
+  date_time: #(calendar.Date, calendar.TimeOfDay),
+) -> String {
+  let #(date, time) = date_time
   let month = calendar.month_to_int(date.month)
 
   weekday_to_string(date.year, month, date.day)
@@ -60,7 +62,25 @@ pub fn to_string(date: calendar.Date) -> String {
   <> month_abbreviation(date.month)
   <> " "
   <> int.to_string(date.year)
-  <> " 00:00:00 GMT"
+  <> " "
+  <> pad2(time.hours)
+  <> ":"
+  <> pad2(time.minutes)
+  <> ":"
+  <> pad2(time.seconds)
+  <> " "
+  <> "GMT"
+}
+
+pub fn to_string(date: Date) -> String {
+  let assert Ok(stamp) = date |> to_timestamp()
+  stamp
+  |> timestamp.to_calendar(calendar.utc_offset)
+  |> calendar_to_string()
+}
+
+pub fn timestamp_to_string(stamp: timestamp.Timestamp) -> String {
+  stamp |> timestamp.to_calendar(calendar.utc_offset) |> calendar_to_string
 }
 
 pub fn to_timestamp(date: Date) -> Result(Timestamp, Nil) {
@@ -94,7 +114,7 @@ fn month_abbreviation(month: calendar.Month) -> String {
   |> string.slice(at_index: 0, length: 3)
 }
 
-fn weekday_to_string(year: Int, month: Int, day: Int) -> String {
+pub fn weekday_to_string(year: Int, month: Int, day: Int) -> String {
   let adjusted_year = case month < 3 {
     True -> year - 1
     False -> year
@@ -142,7 +162,7 @@ fn month_offset(month: Int) -> Int {
   }
 }
 
-fn parse_month(month: String) -> Result(Int, Nil) {
+pub fn parse_month(month: String) -> Result(Int, Nil) {
   case month {
     "Jan" -> Ok(1)
     "Feb" -> Ok(2)
@@ -160,7 +180,7 @@ fn parse_month(month: String) -> Result(Int, Nil) {
   }
 }
 
-fn is_valid_date_time(date: Date) -> Bool {
+pub fn is_valid_date_time(date: Date) -> Bool {
   let calendar_date_is_valid = case calendar.month_from_int(date.month) {
     Ok(month) ->
       calendar.is_valid_date(calendar.Date(date.year, month, date.day))
@@ -176,7 +196,7 @@ fn is_valid_date_time(date: Date) -> Bool {
   && date.second <= 59
 }
 
-fn parse_timezone(timezone: String) -> Result(Int, Nil) {
+pub fn parse_timezone(timezone: String) -> Result(Int, Nil) {
   case timezone {
     "GMT" -> Ok(0)
     "UT" -> Ok(0)
@@ -185,7 +205,7 @@ fn parse_timezone(timezone: String) -> Result(Int, Nil) {
   }
 }
 
-fn parse_numeric_timezone(timezone: String) -> Result(Int, Nil) {
+pub fn parse_numeric_timezone(timezone: String) -> Result(Int, Nil) {
   case string.length(timezone) == 5 {
     False -> Error(Nil)
     True -> {
@@ -209,7 +229,7 @@ fn parse_numeric_timezone(timezone: String) -> Result(Int, Nil) {
   }
 }
 
-fn parse_time(time: String) -> Result(#(Int, Int, Int), Nil) {
+pub fn parse_time(time: String) -> Result(#(Int, Int, Int), Nil) {
   case string.split(time, ":") {
     [hour, minute, second] -> {
       use hour <- result.try(int.parse(hour))

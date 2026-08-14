@@ -6,7 +6,6 @@ import gleam/list
 import gleam/order
 import gleam/result
 import gleam/string
-import gleam/time/calendar
 import gleam/time/timestamp.{type Timestamp}
 import parsed_it/xml
 import rfc1123
@@ -69,12 +68,7 @@ pub fn make_feed(posts: List(Post)) -> String {
               xml.element("pubDate", [], [
                 xml.string(
                   post.date
-                  |> timestamp.to_calendar(calendar.utc_offset)
-                  |> fn(date_time) {
-                    let #(date, _) = date_time
-                    date
-                  }
-                  |> rfc1123.to_string,
+                  |> rfc1123.timestamp_to_string,
                 ),
               ]),
               xml.element("link", [], [xml.string(post.link)]),
